@@ -1,33 +1,36 @@
-name: Build, Deploy and Run
+name: Build and Deploy to GKE
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
-    inputs:
-      run_build:
-        description: 'Run build job'
-        required: false
-        type: boolean
-        default: true
-      run_deploy:
-        description: 'Run deploy job'
-        required: false
-        type: boolean
-        default: true
-      run_verify:
-        description: 'Run verify job'
-        required: false
-        type: boolean
-        default: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || inputs.run_build }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -39,6 +42,10 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           install_components: 'kubectl'
+
+      - name: Authenticate Docker to Google Cloud
+        run: |
+          gcloud auth configure-docker
 
       - name: Set Docker tag
         id: vars
@@ -46,23 +53,10 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/cloud-app:${TAG}
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || inputs.run_deploy }}
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          install_components: 'kubectl'
+          docker buildx build --cache-from=type=local,src=/tmp/.buildx-cache \
+                             --cache-to=type=local,dest=/tmp/.buildx-cache \
+                             --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/cloud-app:${TAG} \
+                             --push .
 
       - name: Get GKE credentials
         run: |
@@ -75,28 +69,3 @@ jobs:
       - name: Rollout status
         run: |
           kubectl rollout status deployment/cloud-app -n cloud-app
-
-  verify:
-    needs: deploy
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || inputs.run_verify }}
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          install_components: 'kubectl'
-
-      - name: Get GKE credentials
-        run: |
-          gcloud container clusters get-credentials cloud-app-cluster --region europe-central2 --project ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Verify deployment
-        run: |
-          kubectl get pods -n cloud-app
-          kubectl get service -n cloud-app
