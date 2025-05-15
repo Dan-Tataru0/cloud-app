@@ -1,13 +1,18 @@
+# Build stage
 FROM gradle:8.6-jdk17 AS build
 WORKDIR /app
 
-COPY build.gradle settings.gradle ./
-RUN gradle dependencies --no-daemon
+# Copiază fișierele corecte pentru Kotlin DSL
+COPY build.gradle.kts settings.gradle.kts ./
+COPY gradle gradle
+COPY gradlew ./
 
+# Copiază restul codului sursă
 COPY . .
 
-RUN gradle bootJar --no-daemon
+RUN ./gradlew bootJar --no-daemon
 
+# Run stage
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
