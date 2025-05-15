@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-app
+  namespace: cloud-app
+  labels:
+    app: cloud-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloud-app
+  template:
+    metadata:
+      labels:
+        app: cloud-app
+    spec:
+      containers:
+      - name: cloud-app
+        image: dant001/cloud-app:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 15 
