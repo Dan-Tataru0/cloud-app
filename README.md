@@ -38,4 +38,4 @@ java -jar ./build/libs/tech-challenge-0.0.1-SNAPSHOT.jar
 1. Application logs should be stored in a centralised logging system (Loki, Kibana, etc.)
 2. Application should be able to send metrics to a monitoring system.
 3. Database should be running on a separate container.
-4. Storage should be mounted to the database container.
+4. Storage should be mounted to the database container
