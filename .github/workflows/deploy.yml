@@ -1,4 +1,4 @@
-name: Build and Deploy to Cloud Run
+name: Build and Deploy to GKE
 
 on:
   push:
@@ -20,16 +20,24 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          install_components: 'beta'
+          install_components: 'kubectl'
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials cloud-app-cluster --region europe-central2 --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Set Docker tag
+        id: vars
+        run: echo "TAG=v${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         run: |
-          gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/cloud-app:${{ github.sha }}
+          gcloud builds submit --tag gcr.io/${{ secrets.GCP_PROJECT_ID }}/cloud-app:${TAG}
 
-      - name: Deploy to Cloud Run
+      - name: Set image in deployment
         run: |
-          gcloud run deploy cloud-app \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/cloud-app:${{ github.sha }} \
-            --region europe-central2 \
-            --platform managed \
-            --allow-unauthenticated
+          kubectl set image deployment/cloud-app cloud-app=gcr.io/${{ secrets.GCP_PROJECT_ID }}/cloud-app:${TAG} -n cloud-app
+
+      - name: Rollout status
+        run: |
+          kubectl rollout status deployment/cloud-app -n cloud-app
