@@ -6,11 +6,11 @@ metadata:
   labels:
     app: cloud-app
 spec:
-  type: LoadBalancer
+  type: NodePort
   ports:
-  - port: 80
-    targetPort: 8080
-    protocol: TCP
-    name: http
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      nodePort: 30080   # sau orice port între 30000-32767
   selector:
-    app: cloud-app 
+    app: cloud-app
